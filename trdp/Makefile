@@ -204,6 +204,8 @@ libtrdpap:	outdir $(OUTDIR)/libtrdpap.a
 
 example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendHello $(OUTDIR)/receiveHello $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
 
+tt: 		$(OUTDIR)/md_recv $(OUTDIR)/md_send
+
 tsn:		$(OUTDIR)/sendTSN $(OUTDIR)/receiveTSN
 
 test:		outdir $(OUTDIR)/getStats $(OUTDIR)/vostest $(OUTDIR)/MCreceiver $(OUTDIR)/test_mdSingle $(OUTDIR)/inaugTest $(OUTDIR)/localtest $(OUTDIR)/pdPull $(OUTDIR)/localtest2 $(OUTDIR)/localtest3 $(OUTDIR)/localtest4 $(OUTDIR)/pdMcRouting $(OUTDIR)/mdDataLength  
@@ -297,6 +299,22 @@ $(OUTDIR_HP)/libtau-hp.so:	$(addprefix $(OUTDIR_HP)/,$(notdir $(TRDP_OPT_OBJS)))
 # rules for the demos
 #
 ###############################################################################
+
+$(OUTDIR)/md_recv:  md_recv.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/md_recv.c \
+				$(CFLAGS) $(INCLUDES) -o $@\
+				-ltrdp \
+				$(LDFLAGS) $(LDLIBS)
+			@$(STRIP) $@
+
+$(OUTDIR)/md_send:  md_send.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/md_send.c \
+				$(CFLAGS) $(INCLUDES) -o $@\
+				-ltrdp \
+				$(LDFLAGS) $(LDLIBS)
+			@$(STRIP) $@
 
 $(OUTDIR)/echoCallback:  echoCallback.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
