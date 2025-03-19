@@ -202,9 +202,9 @@ libtrdp:	outdir $(OUTDIR)/libtrdp.a
 
 libtrdpap:	outdir $(OUTDIR)/libtrdpap.a
 
-example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendHello $(OUTDIR)/receiveHello $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
+example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
 
-tt: 		$(OUTDIR)/md_recv $(OUTDIR)/md_send
+tt: 		$(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send
 
 tsn:		$(OUTDIR)/sendTSN $(OUTDIR)/receiveTSN
 
@@ -316,6 +316,24 @@ $(OUTDIR)/md_send:  md_send.c  $(OUTDIR)/libtrdp.a
 				$(LDFLAGS) $(LDLIBS)
 			@$(STRIP) $@
 
+$(OUTDIR)/pd_recv: pd_recv.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/pd_recv.c \
+			    -ltrdp \
+			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
+			    $(LDLIBS) \
+			    -o $@
+			@$(STRIP) $@
+
+$(OUTDIR)/pd_send:   pd_send.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/pd_send.c \
+			    -ltrdp \
+			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
+			    $(LDLIBS) \
+			    -o $@
+			@$(STRIP) $@
+
 $(OUTDIR)/echoCallback:  echoCallback.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
 			$(CC) example/echoCallback.c \
@@ -347,24 +365,6 @@ $(OUTDIR)/receivePolling:  echoPolling.c  $(OUTDIR)/libtrdp.a
 				$(CFLAGS) $(INCLUDES) -o $@\
 				-ltrdp \
 				$(LDFLAGS) $(LDLIBS)
-			@$(STRIP) $@
-
-$(OUTDIR)/receiveHello: receiveHello.c  $(OUTDIR)/libtrdp.a
-			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/receiveHello.c \
-			    -ltrdp \
-			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
-			    $(LDLIBS) \
-			    -o $@
-			@$(STRIP) $@
-
-$(OUTDIR)/sendHello:   sendHello.c  $(OUTDIR)/libtrdp.a
-			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/sendHello.c \
-			    -ltrdp \
-			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
-			    $(LDLIBS) \
-			    -o $@
 			@$(STRIP) $@
 
 $(OUTDIR)/receiveTSN: receiveTSN.c  $(OUTDIR)/libtrdp.a
