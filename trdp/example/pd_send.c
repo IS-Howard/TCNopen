@@ -13,13 +13,14 @@
 #include "getopt.h"
 #endif
 
+#include "../../SDTv2/api/sdt_api.h"
 #include "trdp_if_light.h"
 #include "vos_thread.h"
 #include "vos_utils.h"
 
 /* Constants */
 #define APP_VERSION         "1.4"
-#define DATA_MAX            1432u
+#define DATA_MAX            800u
 #define DEFAULT_COMID       0u
 #define DEFAULT_CYCLE_TIME  1000000u    /* 1 second in microseconds */
 #define RESERVED_MEMORY     160000u
@@ -34,6 +35,7 @@ typedef struct {
     UINT32              interval;
     UINT32              ownIP;
     UINT32              destIP;
+    BOOL8               sdt;
     UINT8*              outputBuffer;
     UINT32              outputBufferSize;
 } AppContext;
@@ -69,7 +71,8 @@ static void printUsage(const char *appName) {
            "-o <own IP>       : Source IP address (default: INADDR_ANY)\n"
            "-t <target IP>    : Destination IP address (required)\n"
            "-c <comId>        : Communication ID (default: %u)\n"
-           "-s <cycle time>   : Cycle time in us (default: %u)\n"
+           "-p <cycle period> : Cycle period in us (default: %u)\n"
+           "-s                : SDTv2\n"
            "-e                : Send empty request\n"
            "-d <string>       : Custom string to send (default: 'Hello World')\n"
            "-v                : Print version and quit\n",
@@ -124,12 +127,13 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     context->interval = DEFAULT_CYCLE_TIME;
 
     int ch;
-    while ((ch = getopt(argc, argv, "t:o:d:s:h?vec:")) != -1) {
+    while ((ch = getopt(argc, argv, "t:o:d:p:h?vec:s")) != -1) {
         switch (ch) {
             case 'o': context->ownIP = parseIP(optarg); break;
             case 't': context->destIP = parseIP(optarg); break;
             case 'c': context->comId = atoi(optarg); break;
-            case 's': context->interval = atoi(optarg); break;
+            case 'p': context->interval = atoi(optarg); break;
+            case 's': context->sdt = TRUE; break;
             case 'e': context->outputBuffer = NULL; context->outputBufferSize = 0; break;
             case 'd':
                 if (strlen(optarg) >= DATA_MAX) {
@@ -154,11 +158,34 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     return 0;
 }
 
+/* SDTv2 Handle */
+static void addSDTInfo(UINT8 *data, UINT32 *data_size, unsigned int *ssc) {
+    // input parameters
+    uint32_t sid = 0x12345678U; // TODO: add sid counting process
+    uint16_t ver = 2; // SDT version
+
+    sdt_result_t result;
+    UINT16 len = *data_size;
+    UINT16 padding = (4 - len % 4) + 16;
+    *data_size = len + padding;
+    memset(data + len, 0, padding);
+
+    result = sdt_ipt_secure_pd(data, 
+                            *data_size, 
+                            sid, 
+                            ver, 
+                            ssc);
+    if (result != SDT_OK) {
+        fprintf(stderr, "sdt_ipt_secure_pd() failed with %d\n", result);
+    }
+}
+
+
 /* Main Processing Loop */
 static void mainLoop(AppContext *context) {
     INT32 counter = 0;
     UINT8 counterBuffer[DATA_MAX];
-
+    unsigned int ssc = 0;
     while (1) {
         TRDP_FDS_T rfds;
         INT32 noDesc;
@@ -180,16 +207,22 @@ static void mainLoop(AppContext *context) {
         }
 
         if (context->outputBuffer) {
-            sprintf((char*)counterBuffer, "Just a Counter: %08d", counter++);
+            sprintf((char*)counterBuffer, "Just a Counter: %08d", counter++); //data assignment
+            UINT32 data_size = strlen((char*)counterBuffer) + 1;
+            if (context->sdt) {
+                addSDTInfo(counterBuffer, &data_size, &ssc);
+            }
+            context->outputBufferSize = data_size;
             context->outputBuffer = counterBuffer;
-            context->outputBufferSize = strlen((char*)counterBuffer) + 1;
-        }
 
-        TRDP_ERR_T err = tlp_put(context->appHandle, context->pubHandle,
-                               context->outputBuffer, context->outputBufferSize);
-        if (err != TRDP_NO_ERR) {
-            vos_printLogStr(VOS_LOG_ERROR, "PD put error\n");
-            break;
+            TRDP_ERR_T err = tlp_put(context->appHandle, 
+                                    context->pubHandle,
+                                    context->outputBuffer, 
+                                    context->outputBufferSize);
+            if (err != TRDP_NO_ERR) {
+                vos_printLogStr(VOS_LOG_ERROR, "PD put error\n");
+                break;
+            }
         }
     }
 }
@@ -204,7 +237,6 @@ static void cleanup(AppContext *context) {
 /* Main Entry Point */
 int main(int argc, char *argv[]) {
     AppContext context = {0};
-    UINT8 dataBuffer[DATA_MAX];
 
     if (argc <= 1) {
         printUsage(argv[0]);

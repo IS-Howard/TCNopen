@@ -13,6 +13,7 @@
 #include "getopt.h"
 #endif
 
+#include "../../SDTv2/api/sdt_api.h"
 #include "trdp_if_light.h"
 #include "tau_marshall.h"
 #include "vos_utils.h"
@@ -24,7 +25,7 @@
 #define DEFAULT_CYCLE_TIME  1000000u    /* 1 second in microseconds */
 #define RESERVED_MEMORY     1000000u
 #define MAX_TIMEOUT_SEC     1u          /* 1 second */
-#define BUFFER_SIZE         32u
+#define BUFFER_SIZE         900u
 
 /* Data Structures */
 typedef struct {
@@ -33,6 +34,7 @@ typedef struct {
     UINT32              comId;
     UINT32              ownIP;
     UINT32              dstIP;
+    BOOL8               sdt;
     UINT8               buffer[BUFFER_SIZE];
 } AppContext;
 
@@ -71,6 +73,7 @@ static void printUsage(const char *appName) {
            "-o <own IP>       : Local IP address (default: default interface)\n"
            "-m <multicast IP> : Multicast group IP (default: none)\n"
            "-c <comId>        : Communication ID (default: %u)\n"
+           "-s                : SDTv2\n"
            "-v                : Print version and quit\n",
            DEFAULT_COMID);
 }
@@ -120,11 +123,12 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     memset(context->buffer, 0, BUFFER_SIZE);
 
     int ch;
-    while ((ch = getopt(argc, argv, "o:m:h?vc:")) != -1) {
+    while ((ch = getopt(argc, argv, "o:m:h?vc:s")) != -1) {
         switch (ch) {
             case 'o': context->ownIP = parseIP(optarg); break;
             case 'm': context->dstIP = parseIP(optarg); break;
             case 'c': context->comId = atoi(optarg); break;
+            case 's': context->sdt = TRUE; break;
             case 'v':
                 printf("%s: Version %s (%s - %s)\n",
                        argv[0], APP_VERSION, __DATE__, __TIME__);
@@ -137,26 +141,102 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
 
 /* Data Printing Helper */
 static void printReceivedData(const TRDP_PD_INFO_T *pdInfo, const UINT8 *data, UINT32 size) {
-    vos_printLogStr(VOS_LOG_USR, "\nMessage received:\n");
-    vos_printLog(VOS_LOG_USR, "Type = %c%c, ", pdInfo->msgType >> 8, pdInfo->msgType & 0xFF);
-    vos_printLog(VOS_LOG_USR, "Seq  = %u, ", pdInfo->seqCount);
+    printf("\nMessage received:\n");
+    printf("Type = %c%c, ", pdInfo->msgType >> 8, pdInfo->msgType & 0xFF);
+    printf("Seq  = %u \n", pdInfo->seqCount);
     
     if (size > 0) {
-        vos_printLog(VOS_LOG_USR, "with %d Bytes:\n", size);
-        vos_printLog(VOS_LOG_USR, "   %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx\n",
-                    data[0], data[1], data[2], data[3],
-                    data[4], data[5], data[6], data[7]);
-        vos_printLog(VOS_LOG_USR, "   %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx %02hhx\n",
-                    data[8], data[9], data[10], data[11],
-                    data[12], data[13], data[14], data[15]);
         vos_printLog(VOS_LOG_USR, "%s\n", data);
     } else {
         vos_printLog(VOS_LOG_USR, "\n");
     }
 }
 
+/* SDTv2 Handle */
+#define RESULTS(NAME)	case NAME: return #NAME;
+#define DEF_UNKNOWN()	default:   return "UNKNOWN";   
+
+const char* validity_string(sdt_validity_t v)
+{
+    switch (v)
+    {
+        RESULTS(SDT_FRESH)
+        RESULTS(SDT_INVALID)
+        RESULTS(SDT_ERROR)
+        DEF_UNKNOWN()       
+    }
+}
+
+const char* result_string(sdt_result_t r)
+{
+    switch (r)
+    {
+        RESULTS(SDT_OK)
+        RESULTS(SDT_ERR_SIZE)
+        RESULTS(SDT_ERR_VERSION)
+        RESULTS(SDT_ERR_HANDLE)
+        RESULTS(SDT_ERR_CRC)
+        RESULTS(SDT_ERR_DUP)
+        RESULTS(SDT_ERR_LOSS)
+        RESULTS(SDT_ERR_SID)
+        RESULTS(SDT_ERR_PARAM)
+        RESULTS(SDT_ERR_REDUNDANCY)
+        RESULTS(SDT_ERR_SYS)
+        RESULTS(SDT_ERR_LTM)
+        RESULTS(SDT_ERR_INIT)
+        RESULTS(SDT_ERR_CMTHR)
+        DEF_UNKNOWN()       
+    }
+}
+
+static void validateSDTMessage(sdt_handle_t *hnd, int *init, UINT8 *data, UINT32 data_size) {
+    // validateor input
+    uint32_t      sid1 = 0x12345678U; // TODO: add sid counting process
+    uint32_t      sid2 = 0;
+    uint8_t       sid2red = 0;
+    uint16_t      ver = 2; // SDT version
+
+    // sink parameters
+    uint16_t      rx_period = 120;
+    uint16_t      tx_period = 100;
+    uint8_t       n_rxsafe  = 100;
+    uint16_t      n_guard   = 2;
+    uint32_t      cmthr     = 1000;
+    uint16_t      lmi_max   = 200;
+
+    // result parameters
+    sdt_result_t        result;
+    sdt_result_t        sdt_error;
+    sdt_counters_t      counters;
+    uint32_t            ssc_l;
+
+
+    if (*init == 1)
+    {
+        *init = 0;
+        sdt_get_validator(SDT_IPT,  sid1, sid2, sid2red, ver, hnd);
+        sdt_set_sdsink_parameters(*hnd, rx_period, tx_period, n_rxsafe, n_guard, cmthr, lmi_max);
+    }
+    result = sdt_validate_pd(*hnd, data, data_size);
+    sdt_get_errno(*hnd, &sdt_error);
+    sdt_get_ssc(*hnd, &ssc_l);
+    printf("sdt_validate_pd IPT: ssc=%u, valid=%s errno=%s\n", ssc_l, validity_string(result), result_string(sdt_error));
+    printf("SDT result %i\n",result);
+    sdt_get_counters(*hnd, &counters);
+    printf("sdt_counters: rx(%u) err(%u) sid(%u) oos(%u) dpl(%u) udv(%u) lmg(%u)\n", 
+        counters.rx_count,
+        counters.err_count,
+        counters.sid_count,
+        counters.oos_count,
+        counters.dpl_count,
+        counters.udv_count,
+        counters.lmg_count);
+}
+
 /* Main Processing Loop */
 static void mainLoop(AppContext *context) {
+    static int          sdtInit = 1;
+    static sdt_handle_t hnd;
     while (1) {
         TRDP_FDS_T rfds;
         INT32 noDesc;
@@ -184,6 +264,9 @@ static void mainLoop(AppContext *context) {
 
         switch (err) {
             case TRDP_NO_ERR:
+                if (context->sdt) {
+                    validateSDTMessage(&hnd, &sdtInit, context->buffer, receivedSize);
+                }
                 printReceivedData(&pdInfo, context->buffer, receivedSize);
                 break;
             case TRDP_TIMEOUT_ERR:

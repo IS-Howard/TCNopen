@@ -39,6 +39,8 @@ MD = mkdir -p
 	
 CFLAGS += -D$(TARGET_OS)
 
+LDLIBS = ../SDTv2/output/linux-x86_64-rel/libsdt.a
+
 #overwrite this via make call param
 BUILD = bld/output
 
@@ -204,7 +206,7 @@ libtrdpap:	outdir $(OUTDIR)/libtrdpap.a
 
 example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
 
-tt: 		$(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send
+tt: 		libtrdp $(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send
 
 tsn:		$(OUTDIR)/sendTSN $(OUTDIR)/receiveTSN
 
@@ -630,6 +632,12 @@ $(OUTDIR)/mdDataLength: $(OUTDIR)/libtrdp.a mdDataLengthTest.c
 ###############################################################################
 clean:
 	-$(RM) -r $(OUTDIR) $(OUTDIR_HP)
+
+cleantt:
+	-$(RM) $(OUTDIR)/md_recv
+	-$(RM) $(OUTDIR)/md_send
+	-$(RM) $(OUTDIR)/pd_recv
+	-$(RM) $(OUTDIR)/pd_send
 
 unconfig:
 	-$(RM) config/config.mk
