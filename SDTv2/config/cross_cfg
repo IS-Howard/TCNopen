@@ -6,26 +6,24 @@
 # 
 # Component     SDTv2 Library
 #
-# File          TI_ARM_cfg
+# File          cross_cfg
 #
-# Requirements  SDT_LIB-REQ-xxx
+# Requirements  NA
 #
-# Abstract      Build definitions for GW WTB board
+# Abstract      Build definitions for CCU-S under INTEGRITY
 #
 
-ARCH        = ti-arm-gw-s
-CPU         = ARM
-TARGET_OS   = ARM_TI
-TOOLCHAIN   = 
+ARCH        = aarch64
+CPU         = cpu
+TARGET_OS   = LINUX
+TOOLCHAIN   = aarch64-linux-gnu-
+
+LINT_SYSINCLUDE_DIRECTIVES = -DOS_INTEGRITY
 
 SDTLIBFEATURES = -DSDT_ENABLE_IPT \
                  -DSDT_ENABLE_MVB \
+                 -DSDT_ENABLE_WTB \
                  -DSDT_SECURE 
 
-
-PLATFORM_CPPFLAGS = -mv7R4 -g --elf --abi=eabi --code_state=32 --enum_type=int --float_support=VFPv3D16 --issue_remarks --verbose_diagnostics --obj_extension=.o $(SDTLIBFEATURES) 
-                     
-
-
-
-
+LINT_SYSINCLUDE_DIRECTIVES = -i +libh stdint.h +libh pthread.h                  
+PLATFORM_CPPFLAGS = -DO_LE $(SDTLIBFEATURES)

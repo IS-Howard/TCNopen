@@ -8,3 +8,5 @@ trdp/doc/TCN-TRDP2-D-BOM-033-xx - TRDP Reference Manual.pdf
 .cproject
 trdp/config/config.mk
 /libtrdp*
+SDTv2/output/*
+.vscode/*

@@ -88,8 +88,8 @@ LOBJS = sdt_validator.c.lob \
 #########################################################################
 all:		outdir lib_obj lib 
 
-test_app: test/test.c       
-	$(CC) $(CFLAGS)  test/test.c -o test/test.out -L$(OUTDIR)/$(NAME_SO).$(VER_MIN)
+test_app: test/test.c test/etc_test_scenarios.c test/mvb_test_scenarios.c test/ipt_test_scenarios.c test/wtb_test_scenarios.c test/uic_test_scenarios.c
+	$(CC) $(CFLAGS) test/test.c test/etc_test_scenarios.c test/mvb_test_scenarios.c test/ipt_test_scenarios.c test/wtb_test_scenarios.c test/uic_test_scenarios.c -o test/test.out -L$(OUTDIR)/dl2/lib -lsdt
 
 ### GW-S build
 ifeq ($(TARGET_OS), ARM_TI)

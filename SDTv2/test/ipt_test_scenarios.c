@@ -309,7 +309,7 @@ void iptRedRun1(void)
     {
         /**< Latency Time Monitor weighting factor of received fresh VDP */
         lmc =  8;
-        ssc=i+start;//start  + ((i * lmc ) / 10);
+        ssc=i+start;
         redTestFuncIPT(ssc,1,0,1);
     }   
     redTestFuncIPT(ssc,1,0,1);
@@ -321,7 +321,7 @@ void iptRedRun1(void)
     {
         /**< Latency Time Monitor weighting factor of received fresh VDP */
         lmc =  8;
-        ssc=i+start;//start  + ((i * lmc ) / 10);
+        ssc=i+start;
         redTestFuncIPT(ssc,2,0,1);
     }
 }
