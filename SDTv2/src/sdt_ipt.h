@@ -62,6 +62,10 @@ sdt_result_t sdt_ipt_validate_pd(sdt_instance_t     *p_ins,
                                  const void         *p_buf,
                                  uint16_t            len);
 
+sdt_result_t sdt_ipt_validate_md(sdt_instance_t     *p_ins,
+                                 const void         *p_buf,
+                                 uint16_t            len);
+
 
 #endif /* SDT_IPT_H */
 

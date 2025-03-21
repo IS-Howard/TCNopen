@@ -11,6 +11,7 @@
 #elif defined(WIN32) || defined(WIN64)
 #include "getopt.h"
 #endif
+#include "../../SDTv2/api/sdt_api.h"
 #include "trdp_if_light.h"
 #include "vos_thread.h"
 #include "vos_sock.h"
@@ -18,6 +19,7 @@
 
 /* Constants */
 #define APP_VERSION         "1.5"
+#define DATA_MAX            1000u
 #define DEFAULT_COMID       1001u
 #define RESERVED_MEMORY     2000000u
 #define MAX_IF              10u
@@ -27,6 +29,7 @@
 typedef struct {
     BOOL8               responder;
     BOOL8               confirmRequested;
+    BOOL8               sdt;
     UINT32              comId;
     TRDP_APP_SESSION_T  appHandle;
     TRDP_LIS_T          listenUDP;
@@ -63,6 +66,7 @@ static void printUsage(const char *appName) {
     printf("Usage of %s\n", appName);
     printf("Receives and responds to MD messages with following arguments:\n"
            "-o <own IP>       : Local IP address\n"
+           "-s                : SDTv2\n"
            "-c                : Respond with confirmation\n"
            "-b <0|1>          : Blocking mode (default: 1)\n"
            "-v                : Print version and quit\n");
@@ -117,11 +121,12 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     context->blockingMode = TRUE;
 
     int ch;
-    while ((ch = getopt(argc, argv, "o:b:cvh?")) != -1) {
+    while ((ch = getopt(argc, argv, "o:b:cvhs?")) != -1) {
         switch (ch) {
             case 'o': context->ownIP = parseIP(optarg); break;
             case 'c': context->confirmRequested = TRUE; break;
             case 'b': context->blockingMode = atoi(optarg); break;
+            case 's': context->sdt = TRUE; break;
             case 'v':
                 printf("%s: Version %s (%s - %s)\n", argv[0], APP_VERSION, __DATE__, __TIME__);
                 exit(0);
@@ -131,10 +136,82 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     return 0;
 }
 
+/* SDTv2 Handle */
+static void addSDTInfo(UINT8 *data, UINT32 *data_size) {
+    // input parameters
+    uint32_t sid = 0x12345678U;
+    uint16_t ver = 2; // SDT version
+    unsigned int ssc = 0xFFFFFFFF; // SSC is fixed for MD
+
+    sdt_result_t result;
+    UINT16 len = *data_size;
+    UINT16 padding = (4 - len % 4) + 16;
+    *data_size = len + padding;
+    memset(data + len, 0, padding);
+
+    result = sdt_ipt_secure_pd(data, 
+                            *data_size, 
+                            sid, 
+                            ver, 
+                            &ssc);
+    if (result != SDT_OK) {
+        fprintf(stderr, "sdt_ipt_secure_pd() failed with %d\n", result);
+    }
+}
+
+#define RESULTS(NAME)	case NAME: return #NAME;
+#define DEF_UNKNOWN()	default:   return "UNKNOWN";   
+
+const char* result_string(sdt_result_t r)
+{
+    switch (r)
+    {
+        RESULTS(SDT_OK)
+        RESULTS(SDT_ERR_SIZE)
+        RESULTS(SDT_ERR_VERSION)
+        RESULTS(SDT_ERR_HANDLE)
+        RESULTS(SDT_ERR_CRC)
+        RESULTS(SDT_ERR_DUP)
+        RESULTS(SDT_ERR_LOSS)
+        RESULTS(SDT_ERR_SID)
+        RESULTS(SDT_ERR_PARAM)
+        RESULTS(SDT_ERR_REDUNDANCY)
+        RESULTS(SDT_ERR_SYS)
+        RESULTS(SDT_ERR_LTM)
+        RESULTS(SDT_ERR_INIT)
+        RESULTS(SDT_ERR_CMTHR)
+        DEF_UNKNOWN()       
+    }
+}
+
+static void validateSDTMessage(UINT8 *data, UINT32 data_size) {
+    // handler fix
+    sdt_handle_t hnd;
+
+    // validateor input
+    uint32_t      sid1 = 0x12345678U; // TODO: add sid counting process
+    uint32_t      sid2 = 0;
+    uint8_t       sid2red = 0;
+    uint16_t      ver = 2; // SDT version
+
+    // result parameters
+    sdt_result_t        result;
+    sdt_result_t        sdt_error;
+
+    sdt_get_validator(SDT_IPT,  sid1, sid2, sid2red, ver, &hnd);
+
+    result = sdt_validate_md(hnd, data, data_size);
+    sdt_get_errno(hnd, &sdt_error);
+    printf("sdt_validate_md errno=%s\n", result_string(sdt_error));
+    printf("SDT result %i\n",result);
+}
+
 /* MD Callback */
 static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
                       const TRDP_MD_INFO_T *pMsg, UINT8 *pData, UINT32 dataSize) {
     AppContext *context = (AppContext *)pRefCon;
+    UINT8 data[DATA_MAX];
+    UINT32 dataSize2 = 0;
     TRDP_ERR_T err;
 
     switch (pMsg->resultCode) {
@@ -142,23 +219,41 @@ static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
             switch (pMsg->msgType) {
                 case TRDP_MSG_MN:
                     vos_printLog(VOS_LOG_USR, "<- MD Notification %u\n", pMsg->comId);
+                    if (context->sdt) {
+                        validateSDTMessage(pData, dataSize);
+                    }
                     if (pData && dataSize > 0)
                         vos_printLog(VOS_LOG_USR, "   Data[%uB]: %.80s...\n", dataSize, pData);
                     break;
                 case TRDP_MSG_MR:
                     vos_printLog(VOS_LOG_USR, "<- MR Request with reply %u\n", pMsg->comId);
+                    if (context->sdt) {
+                        validateSDTMessage(pData, dataSize);
+                    }
                     if (pData && dataSize > 0)
                         vos_printLog(VOS_LOG_USR, "   Data[%uB]: %.80s...\n", dataSize, pData);
                     
                     if (context->confirmRequested) {
                         vos_printLogStr(VOS_LOG_USR, "-> sending reply with query\n");
+                        strncpy((char*)data, "I'm fine, how are you?", DATA_MAX - 1);
+                        dataSize2 = strlen((const char *)data) + 1;
+
+                        if (context->sdt) {
+                            addSDTInfo(data, &dataSize2);
+                        }
+
                         err = tlm_replyQuery(appHandle, &pMsg->sessionId, pMsg->comId, 0u,
-                                           10000000u, NULL, (UINT8 *)"I'm fine, how are you?", 23u,
+                                           10000000u, NULL, data, dataSize2,
                                            "test_mdReceive");
                     } else {
                         vos_printLogStr(VOS_LOG_USR, "-> sending reply\n");
+                        strncpy((char*)data, "I'm fine, thanx!", DATA_MAX - 1);
+                        dataSize2 = strlen((const char *)data) + 1;
+                        if (context->sdt) {
+                            addSDTInfo(data, &dataSize2);
+                        }
                         err = tlm_reply(appHandle, &pMsg->sessionId, pMsg->comId, 0,
-                                      NULL, (UINT8 *)"I'm fine, thanx!", 17, "test_mdReceive");
+                                      NULL, data, dataSize2, "test_mdReceive");
                     }
                     if (err != TRDP_NO_ERR)
                         vos_printLog(VOS_LOG_USR, "tlm_reply/Query returned error %d\n", err);

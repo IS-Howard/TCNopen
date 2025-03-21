@@ -1451,6 +1451,67 @@ SDT_API sdt_validity_t sdt_validate_pd(sdt_handle_t         handle,
 }     
 
 /**
+ * Validates the safety information contained in the specified process
+ * data buffer using the specified validator instance.
+ *
+ * @param  handle       Validator handle as returned by sdt_get_validator()
+ * @param  p_buf        Pointer to the process data buffer to be validated
+ * @param  len          Length of the buffer
+ *
+ * @retval SDT_FRESH    The buffer content is valid and contains fresh data
+ * @retval SDT_INVALID  The buffer content is not valid, the application shall
+ *                      use the data from the most recent successful validation
+ * @retval SDT_ERROR    The buffer content is not valid and no valid data has
+ *                      been received for a period exceeding the configured
+ *                      limits. The caller should go into operational safe mode.
+ *
+ * Global Variables:    priv_instance_array (read/write access)
+ */
+SDT_API sdt_validity_t sdt_validate_md(sdt_handle_t         handle,
+                                       void                *p_buf,
+                                       uint16_t             len)
+{
+    sdt_validity_t valid          = SDT_ERROR;
+    sdt_result_t validationResult = SDT_ERR_SYS;
+    int32_t earlyExitFlag         = 0;
+    sdt_instance_t *p_ins         = NULL;
+
+    sdt_result_t mutex_result = sdt_mutex_lock();
+    if (mutex_result == SDT_OK)
+    {
+        sdt_result_t result = sdt_handle_valid(handle);
+        mutex_result = sdt_mutex_unlock();
+
+        if ((mutex_result == SDT_OK) && (result == SDT_OK))
+        {
+            p_ins = 
+            p_ins = &priv_instance_array[handle];
+            if (p_ins->state != SDT_UNUSED)
+            {
+                switch (p_ins->type)
+                {
+#ifdef SDT_ENABLE_IPT
+                    case SDT_IPT:
+                        validationResult = sdt_ipt_validate_md(p_ins, p_buf, len);
+                        break;
+#endif
+                    default:
+                        earlyExitFlag = 1;
+                        break;
+                }
+                if (earlyExitFlag == 0)
+                {
+                    if (validationResult == SDT_OK){
+                        valid = SDT_FRESH;
+                    }
+                }
+            }
+        }
+    }
+    return valid;
+}  
+
+/**
  * @internal
  * calculate SID from the given parameters
  *

@@ -520,5 +520,44 @@ sdt_result_t sdt_ipt_validate_pd(sdt_instance_t     *p_ins,
     }
     return result;
 }
+
+/**
+ * Bus specific sub function of sdt_validate_md to determine
+ * the basic validity criteria for a VDP
+ *
+ * @param p_ins     Pointer to validator instance
+ * @param p_buf     Pointer to VDP buffer
+ * @param len       length of VDP buffer
+ *
+ * @return Error information
+ */
+sdt_result_t sdt_ipt_validate_md(sdt_instance_t     *p_ins,
+                                 const void         *p_buf,
+                                 uint16_t            len)
+{
+    sdt_result_t result = SDT_ERR_PARAM;    
+
+    if (p_ins != NULL)
+    {
+        if (p_buf != NULL)
+        {
+            /* no len information in VDP trailer, take len from argument */
+            if ((len <= (uint16_t)IPT_VDP_MAXLEN) &&
+                (len >= (uint16_t)IPT_VDP_MINLEN) &&
+                ((len % (uint16_t)4) == (uint16_t)0))
+            {
+                result = sdt_ipt_check_sid(p_ins, p_buf, len);
+                if (result == SDT_OK) {
+                    result = sdt_ipt_check_version(p_ins, p_buf, len);
+                }
+            }
+            else
+            {
+                result = SDT_ERR_SIZE;
+            }
+        }
+    }
+    return result;
+}
 #endif
 

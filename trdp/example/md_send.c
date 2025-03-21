@@ -11,6 +11,7 @@
 #elif defined(WIN32) || defined(WIN64)
 #include "getopt.h"
 #endif
+#include "../../SDTv2/api/sdt_api.h"
 #include "trdp_if_light.h"
 #include "vos_thread.h"
 #include "vos_sock.h"
@@ -35,6 +36,7 @@ typedef struct {
     BOOL8               onlyOnce;
     BOOL8               noData;
     BOOL8               loop;
+    BOOL8               sdt;
     UINT32              comId;
     TRDP_APP_SESSION_T  appHandle;
     BOOL8               blockingMode;
@@ -84,6 +86,7 @@ static void printUsage(const char *appName) {
            "-0                : Send no data\n"
            "-1                : Send only one request\n"
            "-b <0|1>          : Blocking mode (default: 1)\n"
+           "-s                : SDTv2\n"
            "-v                : Print version and quit\n",
            DEFAULT_TIMEOUT);
 }
@@ -123,7 +126,7 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     context->flags = TRDP_FLAGS_CALLBACK;
 
     int ch;
-    while ((ch = getopt(argc, argv, "t:o:p:d:l:e:b:n01vh?")) != -1) {
+    while ((ch = getopt(argc, argv, "t:o:p:d:l:e:b:n01vhs?")) != -1) {
         switch (ch) {
             case 'o': context->ownIP = parseIP(optarg); break;
             case 't': context->destIP = parseIP(optarg); break;
@@ -136,6 +139,7 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
             case 'e': context->expReplies = atoi(optarg); break;
             case 'n': context->notifyOnly = TRUE; break;
             case '0': context->noData = TRUE; break;
+            case 's': context->sdt = TRUE; break;
             case '1': context->onlyOnce = TRUE; context->loop = FALSE; break;
             case 'b': context->blockingMode = atoi(optarg); break;
             case 'v':
@@ -151,6 +155,77 @@ static int processCommandLine(AppContext *context, int argc, char *argv[]) {
     return 0;
 }
 
+/* SDTv2 Handle */
+static void addSDTInfo(UINT8 *data, UINT32 *data_size) {
+    // input parameters
+    uint32_t sid = 0x12345678U;
+    uint16_t ver = 2; // SDT version
+    unsigned int ssc = 0xFFFFFFFF; // SSC is fixed for MD
+
+    sdt_result_t result;
+    UINT16 len = *data_size;
+    UINT16 padding = (4 - len % 4) + 16;
+    *data_size = len + padding;
+    memset(data + len, 0, padding);
+
+    result = sdt_ipt_secure_pd(data, 
+                            *data_size, 
+                            sid, 
+                            ver, 
+                            &ssc);
+    if (result != SDT_OK) {
+        fprintf(stderr, "sdt_ipt_secure_pd() failed with %d\n", result);
+    }
+}
+
+#define RESULTS(NAME)	case NAME: return #NAME;
+#define DEF_UNKNOWN()	default:   return "UNKNOWN";   
+
+const char* result_string(sdt_result_t r)
+{
+    switch (r)
+    {
+        RESULTS(SDT_OK)
+        RESULTS(SDT_ERR_SIZE)
+        RESULTS(SDT_ERR_VERSION)
+        RESULTS(SDT_ERR_HANDLE)
+        RESULTS(SDT_ERR_CRC)
+        RESULTS(SDT_ERR_DUP)
+        RESULTS(SDT_ERR_LOSS)
+        RESULTS(SDT_ERR_SID)
+        RESULTS(SDT_ERR_PARAM)
+        RESULTS(SDT_ERR_REDUNDANCY)
+        RESULTS(SDT_ERR_SYS)
+        RESULTS(SDT_ERR_LTM)
+        RESULTS(SDT_ERR_INIT)
+        RESULTS(SDT_ERR_CMTHR)
+        DEF_UNKNOWN()       
+    }
+}
+
+
+static void validateSDTMessage(UINT8 *data, UINT32 data_size) {
+    // handler fix
+    sdt_handle_t hnd;
+
+    // validateor input
+    uint32_t      sid1 = 0x12345678U; // TODO: add sid counting process
+    uint32_t      sid2 = 0;
+    uint8_t       sid2red = 0;
+    uint16_t      ver = 2; // SDT version
+
+    // result parameters
+    sdt_result_t        result;
+    sdt_result_t        sdt_error;
+
+    sdt_get_validator(SDT_IPT,  sid1, sid2, sid2red, ver, &hnd);
+
+    result = sdt_validate_md(hnd, data, data_size);
+    sdt_get_errno(hnd, &sdt_error);
+    printf("sdt_validate_md errno=%s\n", result_string(sdt_error));
+    printf("SDT result %i\n",result);
+}
+
 /* MD Callback */
 static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
                       const TRDP_MD_INFO_T *pMsg, UINT8 *pData, UINT32 dataSize) {
@@ -162,6 +237,9 @@ static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
                 case TRDP_MSG_MP:
                     vos_printLog(VOS_LOG_USR, "<- MR Reply received %u\n", pMsg->comId);
                     vos_printLog(VOS_LOG_USR, "   from userURI: %.32s\n", pMsg->srcUserURI);
+                    if (context->sdt) {
+                        validateSDTMessage(pData, dataSize);
+                    }
                     if (pData && dataSize > 0)
                         vos_printLog(VOS_LOG_USR, "   Data[%uB]: %.80s...\n", dataSize, pData);
                     context->loop = FALSE;
@@ -169,6 +247,9 @@ static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
                 case TRDP_MSG_MQ:
                     vos_printLog(VOS_LOG_USR, "<- MR Reply with confirmation received %u\n", pMsg->comId);
                     vos_printLog(VOS_LOG_USR, "   from userURI: %.32s\n", pMsg->srcUserURI);
+                    if (context->sdt) {
+                        validateSDTMessage(pData, dataSize);
+                    }
                     if (pData && dataSize > 0)
                         vos_printLog(VOS_LOG_USR, "   Data[%uB]: %.80s...\n", dataSize, pData);
                     vos_printLogStr(VOS_LOG_USR, "-> sending confirmation\n");
@@ -204,7 +285,7 @@ static void mdCallback(void *pRefCon, TRDP_APP_SESSION_T appHandle,
 static TRDP_ERR_T sendMessage(AppContext *context) {
     TRDP_ERR_T err;
     TRDP_UUID_T sessionId;
-    const UINT8 *data = NULL;
+    UINT8 data[DATA_MAX];
     UINT32 dataSize = 0;
 
     if (!context->noData) {
@@ -213,12 +294,16 @@ static TRDP_ERR_T sendMessage(AppContext *context) {
                 context->buffer[i] = DEMO_DATA[j++];
                 if (j >= sizeof(DEMO_DATA)) j = 0;
             }
-            data = context->buffer;
+            memcpy(data, context->buffer, DATA_MAX);
             dataSize = context->dataSize;
         } else {
-            data = (const UINT8 *) (context->notifyOnly ? "Hello, World" : "How are you?");
+            strncpy((char*)data, context->notifyOnly ? "Hello, World" : "How are you?", DATA_MAX - 1);
             dataSize = strlen((const char *)data) + 1;
         }
+    }
+
+    if (context->sdt) {
+        addSDTInfo(data, &dataSize);
     }
 
     if (context->notifyOnly) {

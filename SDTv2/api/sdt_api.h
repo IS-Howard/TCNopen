@@ -272,6 +272,10 @@ SDT_API sdt_validity_t sdt_validate_pd(sdt_handle_t         handle,
                                        void                *p_buf,
                                        uint16_t             len);
 
+SDT_API sdt_validity_t sdt_validate_md(sdt_handle_t         handle,
+                                       void                *p_buf,
+                                       uint16_t             len);
+
 SDT_API sdt_result_t sdt_get_sdsink_parameters(sdt_handle_t  handle,
                                                uint16_t     *p_rx_period,
                                                uint16_t     *p_tx_period,
