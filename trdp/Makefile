@@ -49,7 +49,7 @@ INCPATH += -I src/api
 VOS_PATH += -I src/vos/$(TARGET_VOS)
 VOS_INCPATH += -I src/vos/api -I src/common
 
-vpath %.c src/common src/vos/common test/udpmdcom src/vos/$(TARGET_VOS) test example example/TSN test/diverse test/xml $(ADD_SRC)
+vpath %.c src/common src/vos/common test/udpmdcom src/vos/$(TARGET_VOS) test example example/TSN intri-app test/diverse test/xml $(ADD_SRC)
 vpath %.h src/api src/vos/api src/common src/vos/common $(ADD_INC)
 
 INCLUDES = $(INCPATH) $(VOS_INCPATH) $(VOS_PATH)
@@ -204,9 +204,9 @@ libtrdp:	outdir $(OUTDIR)/libtrdp.a
 
 libtrdpap:	outdir $(OUTDIR)/libtrdpap.a
 
-example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
+example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendHello $(OUTDIR)/receiveHello $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
 
-tt: 		libtrdp $(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send
+tt: 		libtrdp $(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send 
 
 tsn:		$(OUTDIR)/sendTSN $(OUTDIR)/receiveTSN
 
@@ -304,7 +304,7 @@ $(OUTDIR_HP)/libtau-hp.so:	$(addprefix $(OUTDIR_HP)/,$(notdir $(TRDP_OPT_OBJS)))
 
 $(OUTDIR)/md_recv:  md_recv.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/md_recv.c \
+			$(CC) intri-app/md_recv.c \
 				$(CFLAGS) $(INCLUDES) -o $@\
 				-ltrdp \
 				$(LDFLAGS) $(LDLIBS)
@@ -312,7 +312,7 @@ $(OUTDIR)/md_recv:  md_recv.c  $(OUTDIR)/libtrdp.a
 
 $(OUTDIR)/md_send:  md_send.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/md_send.c \
+			$(CC) intri-app/md_send.c \
 				$(CFLAGS) $(INCLUDES) -o $@\
 				-ltrdp \
 				$(LDFLAGS) $(LDLIBS)
@@ -320,7 +320,7 @@ $(OUTDIR)/md_send:  md_send.c  $(OUTDIR)/libtrdp.a
 
 $(OUTDIR)/pd_recv: pd_recv.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/pd_recv.c \
+			$(CC) intri-app/pd_recv.c \
 			    -ltrdp \
 			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
 			    $(LDLIBS) \
@@ -329,7 +329,25 @@ $(OUTDIR)/pd_recv: pd_recv.c  $(OUTDIR)/libtrdp.a
 
 $(OUTDIR)/pd_send:   pd_send.c  $(OUTDIR)/libtrdp.a
 			@$(ECHO) ' ### Building application $(@F)'
-			$(CC) example/pd_send.c \
+			$(CC) intri-app/pd_send.c \
+			    -ltrdp \
+			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
+			    $(LDLIBS) \
+			    -o $@
+			@$(STRIP) $@
+
+$(OUTDIR)/receiveHello: receiveHello.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/receiveHello.c \
+			    -ltrdp \
+			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
+			    $(LDLIBS) \
+			    -o $@
+			@$(STRIP) $@
+
+$(OUTDIR)/sendHello:   sendHello.c  $(OUTDIR)/libtrdp.a
+			@$(ECHO) ' ### Building application $(@F)'
+			$(CC) example/sendHello.c \
 			    -ltrdp \
 			    $(LDFLAGS) $(CFLAGS) $(INCLUDES) \
 			    $(LDLIBS) \
