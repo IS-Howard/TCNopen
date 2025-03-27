@@ -10,3 +10,4 @@ trdp/config/config.mk
 /libtrdp*
 SDTv2/output/*
 .vscode/*
+test/

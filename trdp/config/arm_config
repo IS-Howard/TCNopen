@@ -11,13 +11,16 @@
 #// The TC-Prefix assumes you installed Ubuntu's / Debian's cross-compile packages 'apt install gcc-arm-linux-gnueabihf'
 #// The prefix also works on the target itself for native compilation
 
-ARCH = linux-armhf
+ARCH = armv7
 TARGET_VOS = posix
 TARGET_OS = LINUX
-# set this only for cross-gcc
-TCPREFIX = arm-linux-gnueabihf-
+TCPREFIX = arm-marvell-linux-gnueabi-
 TCPOSTFIX = 
-DOXYPATH = 
+DOXYPATH = /usr/local/bin/
+
+# Cross-compilation tools
+CC = $(TCPREFIX)gcc
+CXX = $(TCPREFIX)g++
 
 # the _GNU_SOURCE is needed to get the extended poll feature for the POSIX socket
 
@@ -34,3 +37,4 @@ LINT_SYSINCLUDE_DIRECTIVES = -i ./src/vos/posix -wlib 0 -DL_ENDIAN
 
 # Use high-throughput optimization
 #HIGH_PERF_INDEXED = 1
+

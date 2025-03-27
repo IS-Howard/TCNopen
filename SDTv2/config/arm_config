@@ -6,25 +6,24 @@
 # 
 # Component     SDTv2 Library
 #
-# File          LINUX_cfg
+# File          cross_cfg
 #
 # Requirements  NA
 #
-# Abstract      Build definitions for x86 Linux
+# Abstract      Build definitions for CCU-S under INTEGRITY
 #
 
-ARCH      = linux
-CPU       = x86_64
-TARGET_OS = LINUX
-TOOLCHAIN =
+ARCH        = armv7
+CPU         = cpu
+TARGET_OS   = LINUX
+TOOLCHAIN   = arm-marvell-linux-gnueabi-
+
+LINT_SYSINCLUDE_DIRECTIVES = -DOS_INTEGRITY
 
 SDTLIBFEATURES = -DSDT_ENABLE_IPT \
                  -DSDT_ENABLE_MVB \
                  -DSDT_ENABLE_WTB \
                  -DSDT_SECURE 
-LINT_SYSINCLUDE_DIRECTIVES = -i /usr/include +libh stdint.h +libh pthread.h                  
-# Remove LDFLAGS += -m32 (no 32-bit specific flags needed)
+
+LINT_SYSINCLUDE_DIRECTIVES = -i +libh stdint.h +libh pthread.h                  
 PLATFORM_CPPFLAGS = -DO_LE $(SDTLIBFEATURES)
-# Remove PLATFORM_CFLAGS+=-m32 (no 32-bit restriction)
-# Remove PLATFORM_CPPFLAGS+=-m32 (no 32-bit restriction)
-# Remove PLATFORM_LDFLAGS+=$(LDFLAGS) (no 32-bit specific linker flags)

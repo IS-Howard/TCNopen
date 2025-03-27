@@ -230,12 +230,8 @@ help:
 unconfig:
 	-$(RM) config/config.mk
 
-%_config: config/%_cfg
-ifeq ($(OS), Windows_NT)
-	$(CP) config\$(@:config=cfg) config\config.mk
-else
-	$(CP) config/$(@:config=cfg) config/config.mk
-endif
+%_config:
+	cp -f config/$@ config/config.mk
 
 distclean:	clean unconfig
 

@@ -39,7 +39,13 @@ MD = mkdir -p
 	
 CFLAGS += -D$(TARGET_OS)
 
-LDLIBS = ../SDTv2/output/linux-x86_64-rel/libsdt.a
+ifeq ($(ARCH),linux)
+    LDLIBS = ../SDTv2/output/linux-rel/libsdt.a
+else ifeq ($(ARCH),armv7)
+    LDLIBS = ../SDTv2/output/armv7-rel/libsdt.a
+else ifeq ($(ARCH),aarch64)
+    LDLIBS = ../SDTv2/output/aarch64-rel/libsdt.a
+endif
 
 #overwrite this via make call param
 BUILD = bld/output
@@ -75,6 +81,7 @@ TRDP_OBJS += trdp_pdcom.o \
 		tlp_if.o \
 		tlc_if.o \
 		trdp_stats.o \
+		sdt_handlers.o \
 		$(VOS_OBJS)
 
 # Optional objects for full blown TRDP usage
@@ -206,7 +213,7 @@ libtrdpap:	outdir $(OUTDIR)/libtrdpap.a
 
 example:	$(OUTDIR)/echoCallback $(OUTDIR)/receivePolling $(OUTDIR)/sendHello $(OUTDIR)/receiveHello $(OUTDIR)/sendData $(OUTDIR)/sourceFiltering
 
-tt: 		libtrdp $(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send 
+intri: 		libtrdp $(OUTDIR)/md_recv $(OUTDIR)/md_send $(OUTDIR)/pd_recv $(OUTDIR)/pd_send 
 
 tsn:		$(OUTDIR)/sendTSN $(OUTDIR)/receiveTSN
 
